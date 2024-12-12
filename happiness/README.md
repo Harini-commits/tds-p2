@@ -50,3 +50,28 @@ This dataset highlights the complex interplay between economic, social, and heal
 
 ![image](https://github.com/user-attachments/assets/f3e7780a-219c-4c6e-9c7f-03179128a6d8)
 
+![image](https://github.com/user-attachments/assets/a6d06680-ce57-4717-a20b-6ed1f05dc999)
+
+![image](https://github.com/user-attachments/assets/b1cbe6be-eeaf-4ef5-b9a2-17a31ccab15f)
+
+![image](https://github.com/user-attachments/assets/3fa2fe50-2e07-46a8-9823-8735ff914b78)
+
+![image](https://github.com/user-attachments/assets/b7a32488-0cc1-49bf-a243-69691349fbc2)
+
+![image](https://github.com/user-attachments/assets/f4101e22-173d-4332-ab84-46d1cefd7df6)
+
+![image](https://github.com/user-attachments/assets/eb8b4582-2f4b-4306-a241-193e11149609)
+
+![image](https://github.com/user-attachments/assets/74178032-e47a-4e03-8df1-1c88c9969e16)
+
+![image](https://github.com/user-attachments/assets/0662e281-9bc5-4970-9c4d-cb1100d9ba66)
+
+![image](https://github.com/user-attachments/assets/9f429d78-653f-4716-9dc2-4eb4d22735ba)
+
+
+
+
+
+
+
+

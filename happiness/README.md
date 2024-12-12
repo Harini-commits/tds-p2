@@ -46,3 +46,7 @@ The provided data summary illustrates a quantitative analysis of various socioec
 ### Conclusion
 
 This dataset highlights the complex interplay between economic, social, and health factors in determining subjective well-being as measured by the Life Ladder. Significant missing data in some crucial indicators may bias results, so consideration must be given to these factors in future analyses. Thus, it indicates that improving economic conditions, social support networks, and personal freedoms can enhance the quality of life and perceived happiness in various nations.
+
+
+![image](https://github.com/user-attachments/assets/f3e7780a-219c-4c6e-9c7f-03179128a6d8)
+

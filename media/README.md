@@ -48,3 +48,12 @@ The provided data summary analyzes a dataset of media entries, focusing on vario
 
 ### **Conclusions**
 The dataset presents a rich array of media entries with a predominance of English-language movies. The involvement of high-profile individuals is notable, and the data reflects general positive ratings. The presence of missing values necessitates attention, primarily in fields like 'date' and 'by'. Future analysis could focus on exploring correlations further, understanding trends in viewer preferences over time, and assessing the depth of content across different languages and types.
+
+
+![image](https://github.com/user-attachments/assets/113def62-5ff1-4114-bcad-6259f917168e)
+
+![image](https://github.com/user-attachments/assets/864ee7bd-bfd5-45db-b32a-860acecd5f05)
+
+![image](https://github.com/user-attachments/assets/37dd1924-2601-45a7-94f8-fa8eb342040f)
+
+

@@ -10,53 +10,20 @@
 #   "ipykernel"
 # ]
 # ///
-
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import chardet
 import os
 import sys
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import httpx
-import chardet
 import logging
-import time
-import numpy as np
+from datetime import datetime
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Constants
-API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN", "your_default_token")
-
-# Helper Function for Dynamic Prompt Generation
-def create_prompt(analysis, visualizations):
-    """Generate a structured prompt for the LLM based on analysis and visualizations."""
-    return f"""
-    Create a detailed Markdown report based on the provided analysis and visualizations. The report should include:
-    
-    # Dataset Overview
-    - A summary of the dataset's key characteristics and dimensions.
-    
-    # Data Analysis
-    - Summary statistics: {analysis['summary']}
-    - Missing values: {analysis['missing_values']}
-    - Top correlations: {list(analysis['correlation'].items())[:5]}
-    
-    # Visualization Insights
-    - Observations from visualizations:
-    {"\n".join(visualizations)}
-    
-    # Key Findings and Implications
-    - Highlight the most significant trends or patterns in the data.
-    - Discuss actionable insights or implications for decision-making.
-    
-    Ensure that the report uses Markdown formatting with headings, bullet points, and tables where appropriate.
-    """
-
-# Load data
+# Load data with efficient handling for large files
 def load_data(file_path):
-    """Load CSV data with encoding detection."""
+    """Load CSV data with encoding detection and chunking for large files."""
     try:
         with open(file_path, 'rb') as f:
             result = chardet.detect(f.read())
@@ -67,151 +34,101 @@ def load_data(file_path):
         logging.error(f"Failed to load data: {e}")
         sys.exit(1)
 
-# Data analysis
-def analyze_data(df):
-    """Perform dynamic data analysis."""
-    try:
-        numeric_df = df.select_dtypes(include=['number'])
-        analysis = {
-            'summary': df.describe(include='all').to_dict(),
-            'missing_values': df.isnull().sum().to_dict(),
-            'correlation': numeric_df.corr().unstack().sort_values(ascending=False).drop_duplicates().head(5).to_dict()
-        }
-        logging.info("Data analysis completed successfully.")
-        return analysis
-    except Exception as e:
-        logging.error(f"Data analysis failed: {e}")
-        sys.exit(1)
+# Generate visualizations
+def create_visualizations(df, output_dir="visualizations"):
+    """Generate and save visualizations to the specified directory."""
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-# Visualization generation
-def visualize_data(df):
-    """Generate and save visualizations."""
     visualizations = []
+
     try:
-        sns.set(style="whitegrid")
-        numeric_columns = df.select_dtypes(include=['number']).columns
-
-        # Histograms and Boxplots
-        for column in numeric_columns:
-            plt.figure()
-            sns.histplot(df[column].dropna(), kde=True, color='blue', bins=min(20, len(df[column].unique())))
-            plt.title(f'Distribution of {column}')
-            plt.xlabel(column)
-            plt.ylabel('Frequency')
-            hist_file = f'{column}_distribution.png'
-            plt.savefig(hist_file)
-            plt.close()
-            visualizations.append(f"Histogram of {column}: {hist_file}")
-
-            plt.figure()
-            sns.boxplot(x=df[column].dropna(), color='green')
-            plt.title(f'Boxplot of {column}')
-            box_file = f'{column}_boxplot.png'
-            plt.savefig(box_file)
-            plt.close()
-            visualizations.append(f"Boxplot of {column}: {box_file}")
-
         # Correlation Heatmap
-        if len(numeric_columns) > 1:
-            plt.figure(figsize=(10, 8))
-            corr = df[numeric_columns].corr()
-            sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
-            heatmap_file = 'correlation_heatmap.png'
-            plt.title('Correlation Heatmap')
-            plt.savefig(heatmap_file)
-            plt.close()
-            visualizations.append(f"Correlation heatmap: {heatmap_file}")
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(df.corr(), annot=True, cmap='coolwarm', fmt='.2f')
+        heatmap_path = os.path.join(output_dir, "correlation_heatmap.png")
+        plt.title("Correlation Heatmap")
+        plt.savefig(heatmap_path)
+        plt.close()
+        visualizations.append(f"Heatmap: {heatmap_path}")
 
-        # Pairplot for correlations
-        if len(numeric_columns) > 1:
-            pairplot_file = 'pairplot.png'
-            sns.pairplot(df[numeric_columns])
-            plt.savefig(pairplot_file)
-            plt.close()
-            visualizations.append(f"Pairplot of numeric columns: {pairplot_file}")
+        # Pair Plot (sampled for efficiency if data is too large)
+        sampled_df = df.sample(min(500, len(df))) if len(df) > 500 else df
+        sns.pairplot(sampled_df)
+        pairplot_path = os.path.join(output_dir, "pair_plot.png")
+        plt.savefig(pairplot_path)
+        plt.close()
+        visualizations.append(f"Pair Plot: {pairplot_path}")
 
-        logging.info("Visualizations created successfully.")
     except Exception as e:
-        logging.error(f"Visualization generation failed: {e}")
+        logging.warning(f"Visualization generation failed: {e}")
+
     return visualizations
 
-# Generate narrative using LLM
-def call_llm(prompt):
-    """Make an LLM call with retries."""
-    headers = {
-        'Authorization': f'Bearer {AIPROXY_TOKEN}',
-        'Content-Type': 'application/json'
+# Analyze dataset
+def analyze_dataset(df):
+    """Perform basic analysis of the dataset."""
+    analysis_results = {
+        "Shape": df.shape,
+        "Columns": df.columns.tolist(),
+        "Missing Values": df.isnull().sum().to_dict(),
+        "Data Types": df.dtypes.to_dict(),
+        "Summary Stats": df.describe().to_dict(),
     }
-    data = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": prompt}]
-    }
+    return analysis_results
 
-    retries = 3
-    for attempt in range(retries):
-        try:
-            response = httpx.post(API_URL, headers=headers, json=data, timeout=30.0)
-            response.raise_for_status()
-            return response.json()['choices'][0]['message']['content']
-        except Exception as e:
-            logging.error(f"Error in LLM call: {e}")
-            time.sleep(2)
-    return "Failed to generate insights after multiple attempts."
+# Generate Markdown report
+def generate_markdown_report(analysis, visualizations, output_file="report.md"):
+    """Generate a Markdown report from the analysis and visualizations."""
+    with open(output_file, "w") as f:
+        f.write("# Dataset Analysis Report\n\n")
+        f.write(f"## Dataset Overview\n")
+        f.write(f"- Shape: {analysis['Shape']}\n")
+        f.write(f"- Columns: {', '.join(analysis['Columns'])}\n")
+        f.write(f"- Missing Values: {analysis['Missing Values']}\n\n")
 
-# Generate insights for visualizations
-def generate_visual_summary(column, file_name):
-    """Generate insights for a specific visualization."""
-    prompt = f"""
-    Analyze the distribution for {column} based on the visualization saved as {file_name}. 
-    Highlight key trends, anomalies, and implications for this data.
-    """
-    return call_llm(prompt)
+        f.write("## Summary Statistics\n")
+        for column, stats in analysis['Summary Stats'].items():
+            f.write(f"### {column}\n")
+            for stat, value in stats.items():
+                f.write(f"- {stat}: {value}\n")
+            f.write("\n")
 
-# Generate insights for correlations
-def generate_correlation_summary(correlations):
-    """Generate insights for top correlations."""
-    prompt = f"""
-    Summarize the following key correlations in the dataset: {correlations}.
-    Discuss potential implications and relationships.
-    """
-    return call_llm(prompt)
+        f.write("## Visualizations\n")
+        for viz in visualizations:
+            viz_name = viz.split(": ")[1]
+            f.write(f"![{viz_name}]({viz_name})\n")
 
-# Generate final Markdown narrative
-def generate_final_narrative(dataset_summary, visual_summary, correlation_summary):
-    """Combine all sections into a Markdown narrative."""
-    prompt = f"""
-    Create a Markdown report with the following sections:
-    1. Dataset Overview: {dataset_summary}.
-    2. Key Correlation Insights: {correlation_summary}.
-    3. Visualization Analysis: {visual_summary}.
-    Highlight actionable insights and decision-making implications.
-    """
-    return call_llm(prompt)
+    logging.info(f"Markdown report generated at: {output_file}")
 
-# Main workflow
+# Main script
 def main(file_path):
+    """Main function to execute the analysis pipeline."""
+    logging.info("Starting dataset analysis pipeline.")
+
+    # Load data
     df = load_data(file_path)
-    analysis = analyze_data(df)
-    visualizations = visualize_data(df)
 
-    # Generate separate insights
-    visual_summaries = [generate_visual_summary(col, f"{col}_distribution.png") for col in df.select_dtypes(include='number').columns]
-    correlation_summary = generate_correlation_summary(analysis['correlation'])
-    dataset_summary = call_llm(f"Summarize the dataset: {analysis['summary']}")
+    # Analyze data
+    analysis_results = analyze_dataset(df)
 
-    # Combine everything into a final narrative
-    final_narrative = generate_final_narrative(dataset_summary, visual_summaries, correlation_summary)
+    # Generate visualizations
+    visualizations = create_visualizations(df)
 
-    # Save the final Markdown report
-    with open('README.md', 'w') as f:
-        f.write(final_narrative)
-    logging.info("Process completed and README.md generated.")
+    # Generate Markdown report
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = f"report_{timestamp}.md"
+    generate_markdown_report(analysis_results, visualizations, output_file)
+
+    logging.info("Analysis pipeline completed.")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        logging.error("Usage: python autolysis.py <dataset.csv>")
+        logging.error("Usage: python script.py <path_to_csv>")
         sys.exit(1)
-    main(sys.argv[1])
+
+    file_path = sys.argv[1]
+    main(file_path)
 
 
 

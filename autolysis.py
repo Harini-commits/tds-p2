@@ -20,6 +20,7 @@ import httpx
 import chardet
 import logging
 import time
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -91,7 +92,7 @@ def visualize_data(df):
         numeric_columns = df.select_dtypes(include=['number']).columns
         for column in numeric_columns:
             plt.figure()
-            sns.histplot(df[column].dropna(), kde=True, color='blue', bins=20)
+            sns.histplot(df[column].dropna(), kde=True, color='blue', bins=min(20, len(df[column].unique())))
             plt.title(f'Distribution of {column}')
             plt.xlabel(column)
             plt.ylabel('Frequency')
@@ -99,6 +100,17 @@ def visualize_data(df):
             plt.savefig(file_name)
             plt.close()
             visualizations.append(f"Visualization of {column}: {file_name}")
+        
+        if len(numeric_columns) > 1:
+            plt.figure(figsize=(10, 8))
+            corr = df[numeric_columns].corr()
+            sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
+            heatmap_file = 'correlation_heatmap.png'
+            plt.title('Correlation Heatmap')
+            plt.savefig(heatmap_file)
+            plt.close()
+            visualizations.append(f"Correlation heatmap: {heatmap_file}")
+        
         logging.info("Visualizations created successfully.")
     except Exception as e:
         logging.error(f"Visualization generation failed: {e}")
@@ -181,5 +193,6 @@ if __name__ == "__main__":
         logging.error("Usage: python autolysis.py <dataset.csv>")
         sys.exit(1)
     main(sys.argv[1])
+
 
 

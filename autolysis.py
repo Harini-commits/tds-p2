@@ -32,15 +32,25 @@ AIPROXY_TOKEN = "your_token_here"
 def create_prompt(analysis, visualizations):
     """Generate a structured prompt for the LLM based on analysis and visualizations."""
     return f"""
-    Create a Markdown report that includes:
-    1. Overview of the dataset.
-    2. Key insights from the following analysis:
-       - Summary statistics: {analysis['summary']}
-       - Missing values: {analysis['missing_values']}
-       - Key correlations: {list(analysis['correlation'].items())[:5]}
-    3. Observations based on visualizations:
-       {visualizations}
-    Include actionable implications for decision-making and highlight significant findings.
+    Create a detailed Markdown report based on the provided analysis and visualizations. The report should include:
+    
+    # Dataset Overview
+    - A summary of the dataset's key characteristics and dimensions.
+    
+    # Data Analysis
+    - Summary statistics: {analysis['summary']}
+    - Missing values: {analysis['missing_values']}
+    - Top correlations: {list(analysis['correlation'].items())[:5]}
+    
+    # Visualization Insights
+    - Observations from visualizations:
+    {"\n".join(visualizations)}
+    
+    # Key Findings and Implications
+    - Highlight the most significant trends or patterns in the data.
+    - Discuss actionable insights or implications for decision-making.
+    
+    Ensure that the report uses Markdown formatting with headings, bullet points, and tables where appropriate.
     """
 
 # Load data
@@ -95,13 +105,12 @@ def visualize_data(df):
     return visualizations
 
 # Generate narrative using LLM
-def generate_narrative(analysis, visualizations):
-    """Generate narrative using LLM with structured prompt."""
+def call_llm(prompt):
+    """Make an LLM call with retries."""
     headers = {
         'Authorization': f'Bearer {AIPROXY_TOKEN}',
         'Content-Type': 'application/json'
     }
-    prompt = create_prompt(analysis, visualizations)
     data = {
         "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt}]
@@ -112,28 +121,59 @@ def generate_narrative(analysis, visualizations):
         try:
             response = httpx.post(API_URL, headers=headers, json=data, timeout=30.0)
             response.raise_for_status()
-            logging.info("Narrative generation successful.")
             return response.json()['choices'][0]['message']['content']
-        except httpx.HTTPStatusError as e:
-            logging.error(f"HTTP error occurred: {e}")
-        except httpx.RequestError as e:
-            logging.error(f"Request error occurred: {e}")
         except Exception as e:
-            logging.error(f"An unexpected error occurred: {e}")
-        logging.info(f"Retrying narrative generation ({attempt + 1}/{retries})...")
-        time.sleep(2)
+            logging.error(f"Error in LLM call: {e}")
+            time.sleep(2)
+    return "Failed to generate insights after multiple attempts."
 
-    return "Narrative generation failed after multiple attempts."
+# Generate insights for visualizations
+def generate_visual_summary(column, file_name):
+    """Generate insights for a specific visualization."""
+    prompt = f"""
+    Analyze the distribution for {column} based on the visualization saved as {file_name}. 
+    Highlight key trends, anomalies, and implications for this data.
+    """
+    return call_llm(prompt)
+
+# Generate insights for correlations
+def generate_correlation_summary(correlations):
+    """Generate insights for top correlations."""
+    prompt = f"""
+    Summarize the following key correlations in the dataset: {correlations}.
+    Discuss potential implications and relationships.
+    """
+    return call_llm(prompt)
+
+# Generate final Markdown narrative
+def generate_final_narrative(dataset_summary, visual_summary, correlation_summary):
+    """Combine all sections into a Markdown narrative."""
+    prompt = f"""
+    Create a Markdown report with the following sections:
+    1. Dataset Overview: {dataset_summary}.
+    2. Key Correlation Insights: {correlation_summary}.
+    3. Visualization Analysis: {visual_summary}.
+    Highlight actionable insights and decision-making implications.
+    """
+    return call_llm(prompt)
 
 # Main workflow
 def main(file_path):
     df = load_data(file_path)
     analysis = analyze_data(df)
     visualizations = visualize_data(df)
-    narrative = generate_narrative(analysis, visualizations)
-    
+
+    # Generate separate insights
+    visual_summaries = [generate_visual_summary(col, f"{col}_distribution.png") for col in df.select_dtypes(include='number').columns]
+    correlation_summary = generate_correlation_summary(analysis['correlation'])
+    dataset_summary = call_llm(f"Summarize the dataset: {analysis['summary']}")
+
+    # Combine everything into a final narrative
+    final_narrative = generate_final_narrative(dataset_summary, visual_summaries, correlation_summary)
+
+    # Save the final Markdown report
     with open('README.md', 'w') as f:
-        f.write(narrative)
+        f.write(final_narrative)
     logging.info("Process completed and README.md generated.")
 
 if __name__ == "__main__":
@@ -141,3 +181,4 @@ if __name__ == "__main__":
         logging.error("Usage: python autolysis.py <dataset.csv>")
         sys.exit(1)
     main(sys.argv[1])
+

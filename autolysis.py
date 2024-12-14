@@ -7,215 +7,179 @@
 #   "httpx",
 #   "chardet",
 #   "numpy",
-#   "ipykernel",
-#   "openai",
-#   "scikit-learn"
+#   "ipykernel"
 # ]
 # ///
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import openai
 import os
-import numpy as np
-from sklearn.linear_model import LinearRegression
-from sklearn.cluster import KMeans
-from scipy.stats import ttest_ind
+import sys
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import httpx
+import chardet
+import logging
+import time
 
-# Set your OpenAI API key (ensure this is handled securely in production)
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Function: Load Dataset
-def load_dataset(file_path, chunksize=None):
-    """Loads the dataset with optional chunking for large files."""
+# Constants
+API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN", "your_default_token")
+
+# Helper Function for Dynamic Prompt Generation
+def create_prompt(analysis, visualizations):
+    """Generate a structured prompt for the LLM based on analysis and visualizations."""
+    return f"""
+    Create a detailed Markdown report based on the provided analysis and visualizations. The report should include:
+    
+    # Dataset Overview
+    - A summary of the dataset's key characteristics and dimensions.
+    
+    # Data Analysis
+    - Summary statistics: {analysis['summary']}
+    - Missing values: {analysis['missing_values']}
+    - Top correlations: {list(analysis['correlation'].items())[:5]}
+    
+    # Visualization Insights
+    - Observations from visualizations:
+    {"\n".join(visualizations)}
+    
+    # Key Findings and Implications
+    - Highlight the most significant trends or patterns in the data.
+    - Discuss actionable insights or implications for decision-making.
+    
+    Ensure that the report uses Markdown formatting with headings, bullet points, and tables where appropriate.
+    """
+
+# Load data
+def load_data(file_path):
+    """Load CSV data with encoding detection."""
     try:
-        if chunksize:
-            return pd.read_csv(file_path, chunksize=chunksize)
-        return pd.read_csv(file_path)
+        with open(file_path, 'rb') as f:
+            result = chardet.detect(f.read())
+        encoding = result['encoding']
+        logging.info(f"Detected encoding: {encoding}")
+        return pd.read_csv(file_path, encoding=encoding)
     except Exception as e:
-        print(f"Error loading dataset: {e}")
-        return None
+        logging.error(f"Failed to load data: {e}")
+        sys.exit(1)
 
-# Function: Analyze Data
+# Data analysis
 def analyze_data(df):
-    """Performs basic data analysis and returns summary statistics."""
+    """Perform dynamic data analysis."""
     try:
-        summary = {
-            "Shape": df.shape,
-            "Columns": df.columns.tolist(),
-            "Missing Values": df.isnull().sum().to_dict(),
-            "Data Types": df.dtypes.to_dict(),
-            "Summary Statistics": df.describe(include='all').to_dict(),
+        numeric_df = df.select_dtypes(include=['number'])
+        analysis = {
+            'summary': df.describe(include='all').to_dict(),
+            'missing_values': df.isnull().sum().to_dict(),
+            'correlation': numeric_df.corr().unstack().sort_values(ascending=False).drop_duplicates().head(5).to_dict()
         }
-
-        # Additional Analysis: Outliers and Distribution
-        numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
-        for col in numeric_cols:
-            summary[f"Outliers in {col}"] = {
-                "Q1": df[col].quantile(0.25),
-                "Q3": df[col].quantile(0.75),
-                "IQR": df[col].quantile(0.75) - df[col].quantile(0.25),
-                "Outliers": ((df[col] < (df[col].quantile(0.25) - 1.5 * (df[col].quantile(0.75) - df[col].quantile(0.25)))) | \
-                             (df[col] > (df[col].quantile(0.75) + 1.5 * (df[col].quantile(0.75) - df[col].quantile(0.25))))).sum()
-            }
-
-        # Additional Analysis: Correlation with Target Variable (if applicable)
-        if "target" in df.columns:
-            correlations = df.corr(numeric_only=True)["target"].sort_values(ascending=False).to_dict()
-            summary["Target Correlations"] = correlations
-
-        return summary
+        logging.info("Data analysis completed successfully.")
+        return analysis
     except Exception as e:
-        print(f"Error analyzing data: {e}")
-        return {}
+        logging.error(f"Data analysis failed: {e}")
+        sys.exit(1)
 
-# Function: Advanced Statistical Analysis
-def perform_statistical_analysis(df):
-    """Performs advanced statistical tests and returns insights."""
+# Visualization generation
+def visualize_data(df):
+    """Generate and save visualizations."""
+    visualizations = []
     try:
-        insights = {}
-
-        # Example: Hypothesis Testing
-        if "target" in df.columns and df["target"].dtype in ['float64', 'int64']:
-            numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
-            for col in numeric_cols:
-                if col != "target":
-                    stat, p_value = ttest_ind(df["target"], df[col], nan_policy='omit')
-                    insights[f"T-test between target and {col}"] = {
-                        "Statistic": stat,
-                        "P-value": p_value
-                    }
-
-        # Example: Clustering
-        numeric_cols = df.select_dtypes(include=['float64', 'int64']).dropna(axis=1)
-        if len(numeric_cols.columns) > 1:
-            kmeans = KMeans(n_clusters=3, random_state=42).fit(numeric_cols)
-            insights["Clustering Labels"] = kmeans.labels_.tolist()
-
-        return insights
-    except Exception as e:
-        print(f"Error in statistical analysis: {e}")
-        return {}
-
-# Function: Generate Visualizations
-def generate_visualizations(df, output_dir="media"):
-    """Generates and saves visualizations based on the dataset."""
-    try:
-        os.makedirs(output_dir, exist_ok=True)
-
-        # Correlation Heatmap
-        plt.figure(figsize=(10, 8))
-        correlation = df.corr(numeric_only=True)
-        sns.heatmap(correlation, annot=True, fmt=".2f", cmap="coolwarm")
-        plt.title("Correlation Heatmap")
-        plt.savefig(f"{output_dir}/correlation_heatmap.png")
-        plt.close()
-
-        # Pairplot for numeric features (if applicable)
-        numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
-        if len(numeric_cols) > 1:
-            sns.pairplot(df[numeric_cols])
-            plt.savefig(f"{output_dir}/pairplot.png")
+        sns.set(style="whitegrid")
+        numeric_columns = df.select_dtypes(include=['number']).columns
+        for column in numeric_columns:
+            plt.figure()
+            sns.histplot(df[column].dropna(), kde=True, color='blue', bins=20)
+            plt.title(f'Distribution of {column}')
+            plt.xlabel(column)
+            plt.ylabel('Frequency')
+            file_name = f'{column}_distribution.png'
+            plt.savefig(file_name)
             plt.close()
-
-        # Distribution Plots
-        for col in numeric_cols:
-            plt.figure(figsize=(6, 4))
-            sns.histplot(df[col].dropna(), kde=True, color="blue")
-            plt.title(f"Distribution of {col}")
-            plt.savefig(f"{output_dir}/{col}_distribution.png")
-            plt.close()
+            visualizations.append(f"Visualization of {column}: {file_name}")
+        logging.info("Visualizations created successfully.")
     except Exception as e:
-        print(f"Error generating visualizations: {e}")
+        logging.error(f"Visualization generation failed: {e}")
+    return visualizations
 
-# Function: Generate LLM Insights
-def generate_llm_insights(summary, prompt_type="dataset_summary"):
-    """Generates insights or narratives using OpenAI GPT."""
-    try:
-        prompt_map = {
-            "dataset_summary": f"""
-                I have a dataset with the following properties:
-                - Shape: {summary.get('Shape', 'N/A')}
-                - Columns: {summary.get('Columns', 'N/A')}
-                - Missing Values: {summary.get('Missing Values', 'N/A')}
-                - Summary Statistics: {summary.get('Summary Statistics', 'N/A')}
+# Generate narrative using LLM
+def call_llm(prompt):
+    """Make an LLM call with retries."""
+    headers = {
+        'Authorization': f'Bearer {AIPROXY_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}]
+    }
 
-                Can you summarize the key insights and trends from this dataset?
-            """,
-            "story_generation": f"""
-                Based on the following dataset properties, create a narrative:
-                - {summary}
-            """
-        }
-        prompt = prompt_map.get(prompt_type, "")
+    retries = 3
+    for attempt in range(retries):
+        try:
+            response = httpx.post(API_URL, headers=headers, json=data, timeout=30.0)
+            response.raise_for_status()
+            return response.json()['choices'][0]['message']['content']
+        except Exception as e:
+            logging.error(f"Error in LLM call: {e}")
+            time.sleep(2)
+    return "Failed to generate insights after multiple attempts."
 
-        if not prompt:
-            print("Invalid prompt type")
-            return None
+# Generate insights for visualizations
+def generate_visual_summary(column, file_name):
+    """Generate insights for a specific visualization."""
+    prompt = f"""
+    Analyze the distribution for {column} based on the visualization saved as {file_name}. 
+    Highlight key trends, anomalies, and implications for this data.
+    """
+    return call_llm(prompt)
 
-        response = openai.Completion.create(
-            engine="gpt-4",
-            prompt=prompt,
-            max_tokens=500,
-            temperature=0.7
-        )
-        return response["choices"][0]["text"].strip()
-    except Exception as e:
-        print(f"Error generating LLM insights: {e}")
-        return None
+# Generate insights for correlations
+def generate_correlation_summary(correlations):
+    """Generate insights for top correlations."""
+    prompt = f"""
+    Summarize the following key correlations in the dataset: {correlations}.
+    Discuss potential implications and relationships.
+    """
+    return call_llm(prompt)
 
-# Function: Write README
-def write_readme(output_dir, summary, insights):
-    """Writes a README file with dataset summary and generated insights."""
-    try:
-        os.makedirs(output_dir, exist_ok=True)
-        readme_path = os.path.join(output_dir, "README.md")
-        with open(readme_path, "w") as f:
-            f.write("# Dataset Insights\n\n")
-            f.write("## Summary\n")
-            f.write(f"Shape: {summary.get('Shape', 'N/A')}\n\n")
-            f.write("## Columns\n")
-            f.write(f"{summary.get('Columns', 'N/A')}\n\n")
-            f.write("## Missing Values\n")
-            f.write(f"{summary.get('Missing Values', 'N/A')}\n\n")
-            f.write("## Insights\n")
-            f.write(f"{insights}\n")
-        print(f"README generated at {readme_path}")
-    except Exception as e:
-        print(f"Error writing README: {e}")
+# Generate final Markdown narrative
+def generate_final_narrative(dataset_summary, visual_summary, correlation_summary):
+    """Combine all sections into a Markdown narrative."""
+    prompt = f"""
+    Create a Markdown report with the following sections:
+    1. Dataset Overview: {dataset_summary}.
+    2. Key Correlation Insights: {correlation_summary}.
+    3. Visualization Analysis: {visual_summary}.
+    Highlight actionable insights and decision-making implications.
+    """
+    return call_llm(prompt)
 
-# Main Workflow
-def main():
-    # File Paths
-    dataset_path = "goodreads.csv"
-    output_dir = "output"
+# Main workflow
+def main(file_path):
+    df = load_data(file_path)
+    analysis = analyze_data(df)
+    visualizations = visualize_data(df)
 
-    # Step 1: Load Dataset
-    df = load_dataset(dataset_path)
-    if df is None:
-        return
+    # Generate separate insights
+    visual_summaries = [generate_visual_summary(col, f"{col}_distribution.png") for col in df.select_dtypes(include='number').columns]
+    correlation_summary = generate_correlation_summary(analysis['correlation'])
+    dataset_summary = call_llm(f"Summarize the dataset: {analysis['summary']}")
 
-    # Step 2: Analyze Data
-    summary = analyze_data(df)
-    print("Dataset Summary:", summary)
+    # Combine everything into a final narrative
+    final_narrative = generate_final_narrative(dataset_summary, visual_summaries, correlation_summary)
 
-    # Step 3: Perform Statistical Analysis
-    stats_insights = perform_statistical_analysis(df)
-    print("Statistical Insights:", stats_insights)
-
-    # Step 4: Generate Visualizations
-    generate_visualizations(df, output_dir="media")
-
-    # Step 5: Generate Insights with LLM
-    insights = generate_llm_insights(summary)
-    print("Generated Insights:", insights)
-
-    # Step 6: Write README
-    write_readme(output_dir, summary, insights)
+    # Save the final Markdown report
+    with open('README.md', 'w') as f:
+        f.write(final_narrative)
+    logging.info("Process completed and README.md generated.")
 
 if __name__ == "__main__":
-    main()
-
+    if len(sys.argv) != 2:
+        logging.error("Usage: python autolysis.py <dataset.csv>")
+        sys.exit(1)
+    main(sys.argv[1])
 
 

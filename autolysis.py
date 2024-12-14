@@ -8,6 +8,7 @@
 #   "chardet",
 #   "numpy",
 #   "ipykernel"
+#   "openai"
 # ]
 # ///
 import os
@@ -19,6 +20,7 @@ import httpx
 import chardet
 import logging
 import time
+import openai
 
 
 # Set your OpenAI API key (ensure this is handled securely in production)

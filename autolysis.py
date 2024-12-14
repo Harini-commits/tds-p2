@@ -7,8 +7,11 @@
 #   "httpx",
 #   "chardet",
 #   "numpy",
+#   "ipykernel"
 # ]
 # ///
+
+
 import os
 import sys
 import pandas as pd

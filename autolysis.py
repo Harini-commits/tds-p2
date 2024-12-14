@@ -10,11 +10,16 @@
 #   "ipykernel"
 # ]
 # ///
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import openai
 import os
+import sys
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import httpx
+import chardet
+import logging
+import time
+
 
 # Set your OpenAI API key (ensure this is handled securely in production)
 openai.api_key = os.getenv("OPENAI_API_KEY")

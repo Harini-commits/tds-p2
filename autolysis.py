@@ -7,7 +7,7 @@
 #   "httpx",
 #   "chardet",
 #   "numpy",
-#   "ipykernel"
+#   "ipykernel",
 #   "openai"
 # ]
 # ///

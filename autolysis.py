@@ -165,30 +165,7 @@ def generate_llm_insights(summary, prompt_type="dataset_summary"):
         print(f"Error generating LLM insights: {e}")
         return None
 
-# Function: Write README
-def write_readme(output_dir, summary, insights):
-    """Writes a README.md file summarizing the project."""
-    try:
-        os.makedirs(output_dir, exist_ok=True)
-        readme_path = os.path.join(output_dir, "README.md")
-        with open(readme_path, "w") as f:
-            f.write("# Project 2: Automated Analysis\n")
-            f.write("\n## Dataset Overview\n")
-            f.write(f"- Shape: {summary.get('Shape', 'N/A')}\n")
-            f.write(f"- Columns: {summary.get('Columns', 'N/A')}\n")
-            f.write(f"- Missing Values: {summary.get('Missing Values', 'N/A')}\n")
-            f.write("\n## Key Insights\n")
-            f.write(insights or "No insights generated.")
-            f.write("\n\n## Visualizations\n")
-            if os.path.exists("media/correlation_heatmap.png"):
-                f.write("![Correlation Heatmap](media/correlation_heatmap.png)\n")
-            if os.path.exists("media/pairplot.png"):
-                f.write("![Pairplot](media/pairplot.png)\n")
-            for file in os.listdir("media"):
-                if file.endswith("_distribution.png"):
-                    f.write(f"![{file}](media/{file})\n")
-    except Exception as e:
-        print(f"Error writing README: {e}")
+
 
 # Main Workflow
 def main():

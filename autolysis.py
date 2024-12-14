@@ -9,7 +9,7 @@
 #   "numpy",
 #   "ipykernel",
 #   "openai",
-#   "sklearn"
+#   "scikit-learn"
 # ]
 # ///
 

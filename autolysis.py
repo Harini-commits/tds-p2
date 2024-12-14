@@ -26,8 +26,24 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Constants
 API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-AIPROXY_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIzZjMwMDEzMjJAZHMuc3R1ZHkuaWl0bS5hYy5pbiJ9.di_3R_E9kT3RT0YMhVcKzMj4bWYKJPauY0Wzb1RBCOo"
+AIPROXY_TOKEN = "your_token_here"
 
+# Helper Function for Dynamic Prompt Generation
+def create_prompt(analysis, visualizations):
+    """Generate a structured prompt for the LLM based on analysis and visualizations."""
+    return f"""
+    Create a Markdown report that includes:
+    1. Overview of the dataset.
+    2. Key insights from the following analysis:
+       - Summary statistics: {analysis['summary']}
+       - Missing values: {analysis['missing_values']}
+       - Key correlations: {list(analysis['correlation'].items())[:5]}
+    3. Observations based on visualizations:
+       {visualizations}
+    Include actionable implications for decision-making and highlight significant findings.
+    """
+
+# Load data
 def load_data(file_path):
     """Load CSV data with encoding detection."""
     try:
@@ -40,14 +56,15 @@ def load_data(file_path):
         logging.error(f"Failed to load data: {e}")
         sys.exit(1)
 
+# Data analysis
 def analyze_data(df):
-    """Perform basic data analysis."""
+    """Perform dynamic data analysis."""
     try:
         numeric_df = df.select_dtypes(include=['number'])
         analysis = {
             'summary': df.describe(include='all').to_dict(),
             'missing_values': df.isnull().sum().to_dict(),
-            'correlation': numeric_df.corr().to_dict()
+            'correlation': numeric_df.corr().unstack().sort_values(ascending=False).drop_duplicates().head(5).to_dict()
         }
         logging.info("Data analysis completed successfully.")
         return analysis
@@ -55,8 +72,10 @@ def analyze_data(df):
         logging.error(f"Data analysis failed: {e}")
         sys.exit(1)
 
+# Visualization generation
 def visualize_data(df):
     """Generate and save visualizations."""
+    visualizations = []
     try:
         sns.set(style="whitegrid")
         numeric_columns = df.select_dtypes(include=['number']).columns
@@ -64,19 +83,25 @@ def visualize_data(df):
             plt.figure()
             sns.histplot(df[column].dropna(), kde=True)
             plt.title(f'Distribution of {column}')
-            plt.savefig(f'{column}_distribution.png')
+            plt.xlabel(column)
+            plt.ylabel('Frequency')
+            file_name = f'{column}_distribution.png'
+            plt.savefig(file_name)
             plt.close()
+            visualizations.append(f"Visualization of {column}: {file_name}")
         logging.info("Visualizations created successfully.")
     except Exception as e:
         logging.error(f"Visualization generation failed: {e}")
+    return visualizations
 
-def generate_narrative(analysis):
-    """Generate narrative using LLM with retry mechanism."""
+# Generate narrative using LLM
+def generate_narrative(analysis, visualizations):
+    """Generate narrative using LLM with structured prompt."""
     headers = {
         'Authorization': f'Bearer {AIPROXY_TOKEN}',
         'Content-Type': 'application/json'
     }
-    prompt = f"Provide a detailed analysis based on the following data summary: {analysis}"
+    prompt = create_prompt(analysis, visualizations)
     data = {
         "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt}]
@@ -100,11 +125,13 @@ def generate_narrative(analysis):
 
     return "Narrative generation failed after multiple attempts."
 
+# Main workflow
 def main(file_path):
     df = load_data(file_path)
     analysis = analyze_data(df)
-    visualize_data(df)
-    narrative = generate_narrative(analysis)
+    visualizations = visualize_data(df)
+    narrative = generate_narrative(analysis, visualizations)
+    
     with open('README.md', 'w') as f:
         f.write(narrative)
     logging.info("Process completed and README.md generated.")

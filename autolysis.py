@@ -8,7 +8,8 @@
 #   "chardet",
 #   "numpy",
 #   "ipykernel",
-#   "openai"
+#   "openai",
+#   "sklearn"
 # ]
 # ///
 

@@ -130,71 +130,83 @@ def generate_visualizations(df, output_dir="media"):
         print(f"Error generating visualizations: {e}")
 
 # Function: Generate LLM Insights
-def generate_llm_insights(summary, prompt_type="dataset_summary"):
-    """Generates insights or narratives using OpenAI GPT."""
-    try:
-        prompt_map = {
-            "dataset_summary": f"""
-                I have a dataset with the following properties:
-                - Shape: {summary.get('Shape', 'N/A')}
-                - Columns: {summary.get('Columns', 'N/A')}
-                - Missing Values: {summary.get('Missing Values', 'N/A')}
-                - Summary Statistics: {summary.get('Summary Statistics', 'N/A')}
+# Generate narrative using LLM
+def call_llm(prompt):
+    """Make an LLM call with retries."""
+    headers = {
+        'Authorization': f'Bearer {AIPROXY_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}]
+    }
 
-                Can you summarize the key insights and trends from this dataset?
-            """,
-            "story_generation": f"""
-                Based on the following dataset properties, create a narrative:
-                - {summary}
-            """
-        }
-        prompt = prompt_map.get(prompt_type, "")
+    retries = 3
+    for attempt in range(retries):
+        try:
+            response = httpx.post(API_URL, headers=headers, json=data, timeout=30.0)
+            response.raise_for_status()
+            return response.json()['choices'][0]['message']['content']
+        except Exception as e:
+            logging.error(f"Error in LLM call: {e}")
+            time.sleep(2)
+    return "Failed to generate insights after multiple attempts."
 
-        if not prompt:
-            print("Invalid prompt type")
-            return None
+# Generate insights for visualizations
+def generate_visual_summary(column, file_name):
+    """Generate insights for a specific visualization."""
+    prompt = f"""
+    Analyze the distribution for {column} based on the visualization saved as {file_name}. 
+    Highlight key trends, anomalies, and implications for this data.
+    """
+    return call_llm(prompt)
 
-        response = openai.Completion.create(
-            engine="gpt-4",
-            prompt=prompt,
-            max_tokens=500,
-            temperature=0.7
-        )
-        return response["choices"][0]["text"].strip()
-    except Exception as e:
-        print(f"Error generating LLM insights: {e}")
-        return None
+# Generate insights for correlations
+def generate_correlation_summary(correlations):
+    """Generate insights for top correlations."""
+    prompt = f"""
+    Summarize the following key correlations in the dataset: {correlations}.
+    Discuss potential implications and relationships.
+    """
+    return call_llm(prompt)
 
+# Generate final Markdown narrative
+def generate_final_narrative(dataset_summary, visual_summary, correlation_summary):
+    """Combine all sections into a Markdown narrative."""
+    prompt = f"""
+    Create a Markdown report with the following sections:
+    1. Dataset Overview: {dataset_summary}.
+    2. Key Correlation Insights: {correlation_summary}.
+    3. Visualization Analysis: {visual_summary}.
+    Highlight actionable insights and decision-making implications.
+    """
+    return call_llm(prompt)
 
+# Main workflow
+def main(file_path):
+    df = load_data(file_path)
+    analysis = analyze_data(df)
+    visualizations = visualize_data(df)
 
-# Main Workflow
-def main():
-    # File Paths
-    dataset_path = "goodreads.csv"
-    output_dir = "output"
+    # Generate separate insights
+    visual_summaries = [generate_visual_summary(col, f"{col}_distribution.png") for col in df.select_dtypes(include='number').columns]
+    correlation_summary = generate_correlation_summary(analysis['correlation'])
+    dataset_summary = call_llm(f"Summarize the dataset: {analysis['summary']}")
 
-    # Step 1: Load Dataset
-    df = load_dataset(dataset_path)
-    if df is None:
-        return
+    # Combine everything into a final narrative
+    final_narrative = generate_final_narrative(dataset_summary, visual_summaries, correlation_summary)
 
-    # Step 2: Analyze Data
-    summary = analyze_data(df)
-    print("Dataset Summary:", summary)
-
-    # Step 3: Perform Statistical Analysis
-    stats_insights = perform_statistical_analysis(df)
-    print("Statistical Insights:", stats_insights)
-
-    # Step 4: Generate Visualizations
-    generate_visualizations(df, output_dir="media")
-
-    # Step 5: Generate Insights with LLM
-    insights = generate_llm_insights(summary)
-    print("Generated Insights:", insights)
-
-    # Step 6: Write README
-    write_readme(output_dir, summary, insights)
+    # Save the final Markdown report
+    with open('README.md', 'w') as f:
+        f.write(final_narrative)
+    logging.info("Process completed and README.md generated.")
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 2:
+        logging.error("Usage: python autolysis.py <dataset.csv>")
+        sys.exit(1)
+    main(sys.argv[1])
+
+
+

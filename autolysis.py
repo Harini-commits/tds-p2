@@ -7,7 +7,8 @@
 #   "httpx",
 #   "chardet",
 #   "numpy",
-#   "ipykernel"
+#   "ipykernel",
+#   "openai"
 # ]
 # ///
 import pandas as pd

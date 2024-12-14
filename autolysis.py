@@ -90,17 +90,28 @@ def visualize_data(df):
     try:
         sns.set(style="whitegrid")
         numeric_columns = df.select_dtypes(include=['number']).columns
+
+        # Histograms and Boxplots
         for column in numeric_columns:
             plt.figure()
             sns.histplot(df[column].dropna(), kde=True, color='blue', bins=min(20, len(df[column].unique())))
             plt.title(f'Distribution of {column}')
             plt.xlabel(column)
             plt.ylabel('Frequency')
-            file_name = f'{column}_distribution.png'
-            plt.savefig(file_name)
+            hist_file = f'{column}_distribution.png'
+            plt.savefig(hist_file)
             plt.close()
-            visualizations.append(f"Visualization of {column}: {file_name}")
-        
+            visualizations.append(f"Histogram of {column}: {hist_file}")
+
+            plt.figure()
+            sns.boxplot(x=df[column].dropna(), color='green')
+            plt.title(f'Boxplot of {column}')
+            box_file = f'{column}_boxplot.png'
+            plt.savefig(box_file)
+            plt.close()
+            visualizations.append(f"Boxplot of {column}: {box_file}")
+
+        # Correlation Heatmap
         if len(numeric_columns) > 1:
             plt.figure(figsize=(10, 8))
             corr = df[numeric_columns].corr()
@@ -110,7 +121,15 @@ def visualize_data(df):
             plt.savefig(heatmap_file)
             plt.close()
             visualizations.append(f"Correlation heatmap: {heatmap_file}")
-        
+
+        # Pairplot for correlations
+        if len(numeric_columns) > 1:
+            pairplot_file = 'pairplot.png'
+            sns.pairplot(df[numeric_columns])
+            plt.savefig(pairplot_file)
+            plt.close()
+            visualizations.append(f"Pairplot of numeric columns: {pairplot_file}")
+
         logging.info("Visualizations created successfully.")
     except Exception as e:
         logging.error(f"Visualization generation failed: {e}")
@@ -193,6 +212,7 @@ if __name__ == "__main__":
         logging.error("Usage: python autolysis.py <dataset.csv>")
         sys.exit(1)
     main(sys.argv[1])
+
 
 
 

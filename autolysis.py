@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Constants
 API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
-AIPROXY_TOKEN = "your_token_here"
+AIPROXY_TOKEN = os.getenv("AIPROXY_TOKEN", "your_default_token")
 
 # Helper Function for Dynamic Prompt Generation
 def create_prompt(analysis, visualizations):
@@ -91,7 +91,7 @@ def visualize_data(df):
         numeric_columns = df.select_dtypes(include=['number']).columns
         for column in numeric_columns:
             plt.figure()
-            sns.histplot(df[column].dropna(), kde=True)
+            sns.histplot(df[column].dropna(), kde=True, color='blue', bins=20)
             plt.title(f'Distribution of {column}')
             plt.xlabel(column)
             plt.ylabel('Frequency')
@@ -181,4 +181,5 @@ if __name__ == "__main__":
         logging.error("Usage: python autolysis.py <dataset.csv>")
         sys.exit(1)
     main(sys.argv[1])
+
 
